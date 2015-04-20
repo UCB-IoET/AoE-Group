@@ -1,0 +1,166 @@
+//This file is included into native.c
+#include "libstormarray.h"
+extern const uint8_t arr_sizemap[];
+extern const uint8_t arr_shiftmap[];
+
+#define NEOPIXEL_SYMBOLS \
+    { LSTRKEY( "neopixel"), LFUNCVAL ( neopixel ) },
+
+uint32_t volatile *gpers = 0x400E1000 + 0x004;
+uint32_t volatile *oders = 0x400E1000 + 0x044;
+uint32_t volatile *ovrs = 0x400E1000 + 0x054;
+
+void ws2812_sendarray(uint8_t *data,int datlen);
+
+static int neopixel( lua_State *L )
+{
+    int idx;
+    uint16_t count;
+    storm_array_t *arr = lua_touserdata(L, 1);
+    if (!arr)
+    {
+        return luaL_error(L, "invalid array");
+    }
+	if (arr->type != ARR_TYPE_UINT8)
+	{
+        return luaL_error(L, "wrong array type: not uint8");
+	}
+
+    count = arr->len >> arr_shiftmap[arr->type];
+
+	*gpers = (1 << 16); // enable D2
+	*oders = (1 << 16); // set D2 to output
+
+	asm volatile ("CPSID I"); // disable interrupts
+	ws2812_sendarray((uint8_t*)ARR_START(arr), count);
+	asm volatile ("CPSIE I"); // re-enable interrupts
+
+	return 0;
+}
+
+/*****************************
+  Based on code from:
+  https://github.com/cpldcpu/light_ws2812/blob/master/light_ws2812_ARM/light_ws2812_cortex.c
+
+  Modified because the original code appears not use ARM assembly correctly
+  (among other issues, it creates an infinite loop)
+******************************/
+
+
+#define ws2812_port_set ((uint32_t*)(0x400E1000 + 0x054))	// Address of the data port register to set the pin
+#define ws2812_port_clr	((uint32_t*)(0x400E1000 + 0x058))	// Address of the data port register to clear the pin
+
+#define ws2812_mask_set  (1<<16)		// Bitmask to set the data out pin
+#define ws2812_mask_clr  (1<<16)		// Bitmask to clear the data out pin
+
+#define ws2812_cpuclk 48000000
+
+///////////////////////////////////////////////////////////////////////
+// End user defined area
+///////////////////////////////////////////////////////////////////////
+
+#if (ws2812_cpuclk<8000000)
+	#error "Minimum clockspeed for ARM ws2812 library is 8 Mhz!"
+#endif
+
+#if (ws2812_cpuclk>60000000)
+	#error "Maximum clockspeed for ARM ws2812 library is 60 Mhz!"
+#endif
+
+
+
+
+#define ws2812_ctot	(((ws2812_cpuclk/1000)*1250)/1000000)
+#define ws2812_t1	(((ws2812_cpuclk/1000)*375 )/1000000)		// floor
+#define ws2812_t2	(((ws2812_cpuclk/1000)*625+500000)/1000000) // ceil
+
+#define w1 (ws2812_t1-2)
+#define w2 (ws2812_t2-ws2812_t1-2+1)
+#define w3 (ws2812_ctot-ws2812_t2-5)
+
+#define ws2812_DEL1 "	nop		\n\t"
+#define ws2812_DEL2 "	b	.+2	\n\t"
+#define ws2812_DEL4 ws2812_DEL2 ws2812_DEL2
+#define ws2812_DEL8 ws2812_DEL4 ws2812_DEL4
+#define ws2812_DEL16 ws2812_DEL8 ws2812_DEL8
+
+
+void ws2812_sendarray(uint8_t *data,int datlen)
+{
+	uint32_t maskhi = ws2812_mask_set;
+	uint32_t masklo = ws2812_mask_clr;
+	volatile uint32_t *set = ws2812_port_set;
+	volatile uint32_t *clr = ws2812_port_clr;
+	uint32_t i;
+	uint32_t curbyte;
+
+	while (datlen--) {
+		curbyte=*data++;
+
+	asm volatile(
+			"		lsl %[dat],#24				\n\t"
+			"		mov %[ctr],#8				\n\t"
+			"ilop%=:							\n\t"
+			"		lsls %[dat], #1				\n\t"
+			"		str %[maskhi], [%[set]]		\n\t"
+#if (w1&1)
+			ws2812_DEL1
+#endif
+#if (w1&2)
+			ws2812_DEL2
+#endif
+#if (w1&4)
+			ws2812_DEL4
+#endif
+#if (w1&8)
+			ws2812_DEL8
+#endif
+#if (w1&16)
+			ws2812_DEL16
+#endif
+			"		bcs one%=					\n\t"
+			"		str %[masklo], [%[clr]]		\n\t"
+			"one%=:								\n\t"
+#if (w2&1)
+			ws2812_DEL1
+#endif
+#if (w2&2)
+			ws2812_DEL2
+#endif
+#if (w2&4)
+			ws2812_DEL4
+#endif
+#if (w2&8)
+			ws2812_DEL8
+#endif
+#if (w2&16)
+			ws2812_DEL16
+#endif
+			"		subs %[ctr], #1				\n\t"
+			"		str %[masklo], [%[clr]]		\n\t"
+//			"       cmp %[ctr], #0              \n\t"
+			"		beq	end%=					\n\t"
+#if (w3&1)
+			ws2812_DEL1
+#endif
+#if (w3&2)
+			ws2812_DEL2
+#endif
+#if (w3&4)
+			ws2812_DEL4
+#endif
+#if (w3&8)
+			ws2812_DEL8
+#endif
+#if (w3&16)
+			ws2812_DEL16
+#endif
+
+			"		b 	ilop%=					\n\t"
+			"end%=:								\n\t"
+			:	[ctr] "+r" (i)
+			:	[dat] "r" (curbyte), [set] "r" (set), [clr] "r" (clr), [masklo] "r" (masklo), [maskhi] "r" (maskhi)
+			);
+	}
+}
+
