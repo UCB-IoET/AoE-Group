@@ -43,7 +43,12 @@ function make_coffee(time)
     on()
     beep()
     local seconds = time / storm.os.SECOND
-    local ret = "BREWING " .. (seconds / 60) .. ":" .. (seconds % 60)
+    local minutes = seconds / 60
+    seconds = seconds % 60
+    if seconds < 10 then
+        seconds = "0" .. seconds
+    end
+    local ret = "BREWING " .. (minutes) .. ":" .. (seconds)
     write_status(ret, 255, 192, 0)
 end
 
@@ -61,7 +66,7 @@ function on_svcd_init()
         cord.new(function()
             local args = storm.array.fromstr(payload)
             local time = args:get_as(storm.array.UINT16, 0)
-            time = 2 * 60 * storm.os.SECOND
+            time = 2 * storm.os.MINUTE
             make_coffee(time)
             cord.await(storm.os.invokeLater, time)
             notify_done()
