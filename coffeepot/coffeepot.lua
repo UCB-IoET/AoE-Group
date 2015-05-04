@@ -56,7 +56,7 @@ function notify_done()
     beep()
     write_status("DONE. ENJOY <3", 0, 255, 0)
     cord.await(storm.os.invokeLater, 10*storm.os.SECOND)
-    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, "I love coffee!")
+    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16))
 end
 
 function on_svcd_init()
@@ -65,8 +65,12 @@ function on_svcd_init()
     SVCD.add_attribute(COFFEE_SERVICE, MKCOFFEE_ATTR, function(payload, source_ip, source_port)
         cord.new(function()
             local args = storm.array.fromstr(payload)
-            local time = args:get_as(storm.array.UINT16, 0)
-            time = 2 * storm.os.MINUTE
+            local time = args:get_as(storm.array.UINT16, 0) * storm.os.SECOND
+            local time = 2 * storm.os.MINUTE
+
+            local data = storm.array.create(1, storm.array.UINT16)
+            data:set(1, time / storm.OS.SECOND)
+            storm.os.invokeLater(1*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, data)
             make_coffee(time)
             cord.await(storm.os.invokeLater, time)
             notify_done()
@@ -82,10 +86,7 @@ cord.new(function ()
     lcd:writeString("I LOVE COFFEE")
     lcd:setCursor(1, 0)
     lcd:writeString("COFFEE IS LOVE")
-    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, "I love coffee!")
-
---    cord.await(storm.os.invokeLater, 5*storm.os.SECOND)
---    make_coffee()
+    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16))
 end)
 
 cord.enter_loop()
