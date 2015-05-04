@@ -56,7 +56,7 @@ function notify_done()
     beep()
     write_status("DONE. ENJOY <3", 0, 255, 0)
     cord.await(storm.os.invokeLater, 10*storm.os.SECOND)
-    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16))
+    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16):as_str())
 end
 
 function on_svcd_init()
@@ -69,8 +69,8 @@ function on_svcd_init()
             local time = 2 * storm.os.MINUTE
 
             local data = storm.array.create(1, storm.array.UINT16)
-            data:set(1, time / storm.OS.SECOND)
-            storm.os.invokeLater(1*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, data)
+            data:set(1, time / storm.os.SECOND)
+            storm.os.invokeLater(1*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, data:as_str())
             make_coffee(time)
             cord.await(storm.os.invokeLater, time)
             notify_done()
@@ -86,7 +86,7 @@ cord.new(function ()
     lcd:writeString("I LOVE COFFEE")
     lcd:setCursor(1, 0)
     lcd:writeString("COFFEE IS LOVE")
-    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16))
+    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16):as_str())
 end)
 
 cord.enter_loop()
