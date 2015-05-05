@@ -29,5 +29,9 @@ function RELAY:off()
    storm.io.set(0,storm.io[self.pin])
 end
 
+function RELAY:get_status()
+   return storm.io.getd(storm.io[self.pin])
+end
+
 return RELAY
 
