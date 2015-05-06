@@ -2,19 +2,10 @@ require("svcd")
 require "cord" -- scheduler / fiber library
 Toaster = require "toaster"
 
-print("waypoint 1")
-
 TOASTER_SERVICE = 0x3010
 ON_ATTR = 0x4001
 SETPOINT_ATTR = 0x4b00
 TEMP_ATTR = 0x4b01
-
-
-toaster = Toaster:new("D6")
-toaster:init()
-
-storm.io.set_mode(storm.io.OUTPUT, storm.io.GP0)
-
 
 function on_svcd_init()
     -- Called when SVCD is ready to have services added
@@ -54,7 +45,7 @@ function on_svcd_init()
     -- the temp attr cannot be written
     SVCD.add_attribute(TOASTER_SERVICE, TEMP_ATTR, function() end)
 
-    storm.os.invokePeriodically(20*storm.os.SECOND, do_notify)
+    storm.os.invokePeriodically(20*storm.os.SECOND, function() cord.new(do_notify) end)
 end
 
 do_notify = function()
@@ -66,14 +57,24 @@ do_notify = function()
         data:set(1, 0)
     end
     SVCD.notify(TOASTER_SERVICE, ON_ATTR, data:as_str())
+    cord.await(storm.os.invokeLater, 400*storm.os.MILLISECOND)
 
     local data = storm.array.create(1, storm.array.UINT16)
     data:set(1, toaster:getTemp())
     SVCD.notify(TOASTER_SERVICE, TEMP_ATTR, data:as_str())
+    cord.await(storm.os.invokeLater, 400*storm.os.MILLISECOND)
+
     data:set(1, toaster:getTarget())
     SVCD.notify(TOASTER_SERVICE, SETPOINT_ATTR, data:as_str())
 end
 
-SVCD.init("toaster", on_svcd_init)
+cord.new(function()
+             storm.io.set_mode(storm.io.OUTPUT, storm.io.GP0)
+
+             toaster = Toaster:new("D6")
+             toaster:init()
+
+             SVCD.init("toaster", on_svcd_init)
+         end)
 
 cord.enter_loop() -- start event/sleep loop
