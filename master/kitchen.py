@@ -1,5 +1,11 @@
 """
-pysvcd demo: Subscribes to anything and everything it finds
+Main kitchen controller (in python to allow faster prototyping)
+
+To run:
+* Flash a firestorm with pysvcd_bridge.lua
+* Run this script while that firestorm is plugged in
+
+Scroll down to "the_recipe" for instructions on how to create a recipe
 """
 
 import time
@@ -20,6 +26,11 @@ def pprint(table):
 
 
 class PrepInterface(object):
+    """
+    Runs the recipe once in prep mode
+    (checks that all kitchen devices are online)
+    """
+
     def __init__(self, svcd):
         self.svcd = svcd
         self.attrs = set()
@@ -85,6 +96,10 @@ class PrepInterface(object):
         print ""
 
 class RunInterface(object):
+    """
+    Runs the recipe with actual effects on hardware
+    """
+
     def __init__(self, svcd):
         self.svcd = svcd
         self.table = svcd.get_table()
@@ -142,24 +157,38 @@ class RunInterface(object):
         unsubscribe_fn = self.table[a][b][c].subscribe(on_val)
 
 
-def run_recipe(svcd, recipe):
-    prep = PrepInterface(svcd)
-    recipe(prep)
-    prep.connect_everything()
-
-    run = RunInterface(svcd)
-    recipe(run)
-
-    if run.queries:
-        print "[WARNING]: forgot to run wait_achieved()"
-        run.wait_achieved()
-    if run.commands:
-        print "[WARNING]: forgot to run wait_completed()"
-        run.wait_completed()
-    print "SHUTTING DOWN"
-
-# This is the main recipe!!!
 def the_recipe(x):
+    """
+    This is the main recipe
+
+    The names below are (device-id, service-name, attr-name) pairs, where the
+    service and attribute names are looked up in manifest.json
+
+    How to issue commands:
+        x.set(id, svc, attr, new_value) -- queue setting the attribute to a value
+        x.wait_completed() -- execute all queued actions
+                              (allows executing actions in parallel)
+
+    How to wait for something to change:
+        x.cond(id, svc, attr, operator, lhs) -- queue a condition to wait for
+            The condition is achieved if operator(value, lhs) evaluates to True
+            Good operators are operator.gt, operator.ge, etc from the python libs
+
+        x.wait_achieved() -- wait for all operations to be true
+                             (allows determining in parallel if all conditions
+                              are met)
+
+
+    Other useful stuff: prints, sleeps
+
+
+    The script that runs this recipe will first wait for all devices used to be
+    advertising on svcd, and determine their IP addresses.
+
+    Then it will execute the recipe, with retries in case commands fail
+    """
+
+
     print "Setting setpoint on toaster"
     x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.setpoint", 300)
     x.wait_completed()
@@ -182,7 +211,30 @@ def the_recipe(x):
     x.wait_completed()
     print "RECIPE DONE"
 
-if __name__ == "__main__":
+def run_recipe(recipe):
+    """
+    Bootstrap script for running a recipe
+    """
     svcd = SerialSVCD()
-    time.sleep(5.0)
-    run_recipe(svcd, the_recipe)
+    time.sleep(5.0) # Wait for the svcd bridge to boot up
+
+    # Wait for all devices in the kitchen to come online
+    prep = PrepInterface(svcd)
+    recipe(prep)
+    prep.connect_everything()
+
+    # Run the recipe
+    run = RunInterface(svcd)
+    recipe(run)
+
+    # Clean up
+    if run.queries:
+        print "[WARNING]: forgot to run wait_achieved()"
+        run.wait_achieved()
+    if run.commands:
+        print "[WARNING]: forgot to run wait_completed()"
+        run.wait_completed()
+    print "SHUTTING DOWN"
+
+if __name__ == "__main__":
+    run_recipe(the_recipe)
