@@ -9,8 +9,10 @@ relay = storm.io.D2
 coffee_on = 0
 storm.io.set_mode(storm.io.OUTPUT, buzzer, relay)
 
+--[[
 LCD = require "lcd"
 lcd = LCD:new(storm.i2c.EXT, 0x7c, storm.i2c.EXT, 0xc4)
+]]--
 
 debug_delay = 1000*storm.os.MILLISECOND
 
@@ -28,6 +30,8 @@ function beep(delay)
 end
 
 function write_status(msg, r, g, b)
+    print("STATUS:"..msg)
+    --[[
     if r and g and b then
         lcd:setBackColor(r, g, b)
     end
@@ -36,6 +40,7 @@ function write_status(msg, r, g, b)
     lcd:writeString("STATUS:")
     lcd:setCursor(1, 0)
     lcd:writeString(msg)
+    ]]--
 end
 
 function make_coffee(time)
@@ -55,7 +60,6 @@ end
 function notify_done()
     beep()
     write_status("DONE. ENJOY <3", 0, 255, 0)
-    cord.await(storm.os.invokeLater, 10*storm.os.SECOND)
     announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16):as_str())
 end
 
@@ -66,7 +70,6 @@ function on_svcd_init()
         cord.new(function()
             local args = storm.array.fromstr(payload)
             local time = args:get_as(storm.array.UINT16, 0) * storm.os.SECOND
-            local time = 2 * storm.os.MINUTE
 
             local data = storm.array.create(1, storm.array.UINT16)
             data:set(1, time / storm.os.SECOND)
@@ -78,15 +81,17 @@ function on_svcd_init()
     end)
 end
 
-SVCD.init("coffee", on_svcd_init)
-
 cord.new(function ()
+             SVCD.init("coffee", on_svcd_init)
+
+             --[[
     lcd:init(2, 1)
     lcd:setBackColor(255, 255, 255)
     lcd:writeString("I LOVE COFFEE")
     lcd:setCursor(1, 0)
     lcd:writeString("COFFEE IS LOVE")
-    announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16):as_str())
+             ]]--
+             announcer = storm.os.invokePeriodically(20*storm.os.SECOND, SVCD.notify, COFFEE_SERVICE, MKCOFFEE_ATTR, storm.array.create(1, storm.array.UINT16):as_str())
 end)
 
 cord.enter_loop()
