@@ -41,7 +41,7 @@ function demo_colors()
     while 1 do
         for i = 2, 8 do
             set_color(rgb_vals[i])
-            for i = 1, 500000 do end
+            for i = 1, 100000 do end
         end
     end
 end
