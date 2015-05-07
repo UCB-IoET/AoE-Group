@@ -48,10 +48,12 @@ class PrepInterface(object):
         pass
 
     def connect_everything(self):
-        print "Waiting for all devices to connect..."
+        print "\n\n\n\n"
+        print "[MASTER] Waiting for the following devices to connect:"
         self.attrs = list(sorted(self.attrs))
         for a, b, c in self.attrs:
             print "    {}:{}:{}".format(a, b, c)
+        print "\n\n"
 
         last_table = {}
 
@@ -70,7 +72,7 @@ class PrepInterface(object):
                             do_print = True
                             break
             if do_print:
-                pprint(table)
+                # pprint(table)
                 last_table = deepcopy(table)
 
 
@@ -90,7 +92,7 @@ class PrepInterface(object):
 
 
             time.sleep(0.5)
-        print "All devices connected"
+        print "[MASTER] All devices connected"
         print ""
         print ""
         print ""
@@ -188,27 +190,51 @@ def the_recipe(x):
     Then it will execute the recipe, with retries in case commands fail
     """
 
+    # This is a dummy recipe
+    # (i.e. not tested to actually be the correct sequencing of events)
 
-    print "Setting setpoint on toaster"
-    x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.setpoint", 300)
-    x.wait_completed()
-    print "Turning on toaster"
+    # TODO: if there is a button service, use it to start everything
+
+    # Set the hotplate and toaster to preheat mode
+    print "Preheating toaster and hotplate..."
+    x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.setpoint", 255)
     x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.on", 1)
+    x.set("hotplate", "pm.storm.hotplate", "pm.storm.attr.hotplate.on", 1)
     x.wait_completed()
+
+    # TODO: wait for human action to start main cycle (need button service)
     print "Waiting for toaster to warm up"
     x.cond("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.temp",
-                operator.gt, 200)
+                operator.gt, 200) # DEBUG: 200 is below room temperature!
     x.wait_achieved()
-    print "Making coffee..."
-    x.set("coffee", "pm.storm.svc.nespresso", "pm.storm.attr.nespresso.mkcoffee", 25)
+
+    # Start the coffee maker
+    print "Starting coffee..."
+    x.set("coffee", "pm.storm.svc.nespresso", "pm.storm.attr.nespresso.mkcoffee",
+          25 # seconds to brew
+    )
     x.wait_completed()
+
+    # Once the coffee is partially done, start the toast (raise the temp)
+    print "Coffee is brewing..."
+    time.sleep(2.0)
+    print "Increasing toast temperature"
+    x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.setpoint", 300)
+    x.wait_completed()
+
+
+    # Everything should finish at the same time
     print "Waiting for coffee to finish..."
     x.cond("coffee", "pm.storm.svc.nespresso", "pm.storm.attr.nespresso.mkcoffee", operator.le, 0)
     x.wait_achieved()
-    print "Turning off toaster"
+
+    print "Turning off toaster and hotplate"
     x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.setpoint", 0)
     x.set("toaster", "pm.storm.toaster", "pm.storm.attr.toaster.on", 0)
+    x.set("hotplate", "pm.storm.hotplate", "pm.storm.attr.hotplate.on", 0)
     x.wait_completed()
+
+
     print "RECIPE DONE"
 
 def run_recipe(recipe):
@@ -225,6 +251,8 @@ def run_recipe(recipe):
 
     # Run the recipe
     run = RunInterface(svcd)
+    print "\n\n\n\n"
+    print "[MASTER] Running recipe"
     recipe(run)
 
     # Clean up
